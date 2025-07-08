@@ -5,6 +5,7 @@ import (
 	"demo/pkg/logger"
 
 	"github.com/gofiber/fiber/v2"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -19,6 +20,10 @@ func NewUserHandler(svc *service.UserService) *UserHandler {
 func (h *UserHandler) GetUser(c *fiber.Ctx) error {
 	ctx := c.UserContext()
 	logger := logger.FromContext(ctx)
+
+	tracer := trace.SpanFromContext(ctx).TracerProvider().Tracer("handler")
+	ctx, span := tracer.Start(ctx, "Handler:GetUser")
+	defer span.End()
 
 	logger.Info("Handler: GetUser called")
 
