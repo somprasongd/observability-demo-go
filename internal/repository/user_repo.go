@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
-	"log"
+	"demo/pkg/logger"
+
+	"go.uber.org/zap"
 )
 
 type UserRepository struct{}
@@ -12,7 +14,8 @@ func NewUserRepository() *UserRepository {
 }
 
 func (r *UserRepository) FindUser(ctx context.Context, id string) (map[string]string, error) {
-	log.Printf("Repository: FindUser called with ID %s\n", id)
+	logger := logger.FromContext(ctx)
+	logger.Info("Repository: FindUser called", zap.String("id", id))
 
 	// Mock DB
 	user := map[string]string{

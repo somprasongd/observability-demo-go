@@ -2,9 +2,10 @@ package handler
 
 import (
 	"demo/internal/service"
-	"log"
+	"demo/pkg/logger"
 
 	"github.com/gofiber/fiber/v2"
+	"go.uber.org/zap"
 )
 
 type UserHandler struct {
@@ -17,14 +18,15 @@ func NewUserHandler(svc *service.UserService) *UserHandler {
 
 func (h *UserHandler) GetUser(c *fiber.Ctx) error {
 	ctx := c.UserContext()
+	logger := logger.FromContext(ctx)
 
-	log.Println("Handler: GetUser called")
+	logger.Info("Handler: GetUser called")
 
 	id := c.Params("id")
 
 	user, err := h.svc.GetUser(ctx, id)
 	if err != nil {
-		log.Println("Handler: Failed to get user")
+		logger.Error("Handler: Failed to get user", zap.Error(err))
 		return c.Status(500).SendString("Internal Server Error")
 	}
 

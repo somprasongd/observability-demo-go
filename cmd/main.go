@@ -8,13 +8,19 @@ import (
 	"demo/internal/handler"
 	"demo/internal/repository"
 	"demo/internal/service"
+	"demo/pkg/logger"
+	"demo/pkg/middleware"
 )
 
 func main() {
+	// Init Logger
+	logger.Init()
+
 	// Init Fiber
 	app := fiber.New()
 
 	// Middlewares
+	app.Use(middleware.NewObservabilityMiddleware(logger.Default()))
 	app.Use(cors.New())
 	app.Use(recover.New())
 

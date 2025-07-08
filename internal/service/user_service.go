@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"demo/internal/repository"
-	"log"
+	"demo/pkg/logger"
+
+	"go.uber.org/zap"
 )
 
 type UserService struct {
@@ -15,6 +17,8 @@ func NewUserService(repo *repository.UserRepository) *UserService {
 }
 
 func (s *UserService) GetUser(ctx context.Context, id string) (map[string]string, error) {
-	log.Printf("Service: GetUser called with ID %s\n", id)
+	logger := logger.FromContext(ctx)
+	logger.Info("Service: GetUser called", zap.String("id", id))
+
 	return s.repo.FindUser(ctx, id)
 }
