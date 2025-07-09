@@ -10,6 +10,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
@@ -17,11 +19,21 @@ import (
 func NewObservabilityMiddleware(
 	baseLogger *zap.Logger,
 	tracer trace.Tracer,
+	meter metric.Meter,
 ) fiber.Handler {
+
+	// ----- OTel Instruments -----
+	requestCounter, _ := meter.Int64Counter("http_requests_total")
+	requestDuration, _ := meter.Float64Histogram("http_request_duration_ms")
+	inflightCounter, _ := meter.Int64UpDownCounter("http_requests_inflight")
+	requestSize, _ := meter.Float64Histogram("http_request_size_bytes")
+	responseSize, _ := meter.Float64Histogram("http_response_size_bytes")
+	errorCounter, _ := meter.Int64Counter("http_requests_error_total")
 
 	// Skip Paths ที่ไม่ต้องการ trace
 	skipPaths := map[string]bool{
-		"/health": true,
+		"/health":  true,
+		"/metrics": true,
 	}
 	// กรณีมีการ serve SPA
 	staticPrefixes := []string{"/static", "/assets", "/public", "/favicon", "/robots.txt"}
@@ -66,6 +78,8 @@ func NewObservabilityMiddleware(
 		reqLogger := baseLogger.With(
 			zap.String("trace_id", traceID), // เพิ่ม trace_id เพื่อเชื่อมโยง log กับ trace
 			zap.String("request_id", requestID),
+			zap.String("method", method),
+			zap.String("path", path),
 		)
 
 		// สร้าง Context ใหม่ที่มี logger
@@ -73,10 +87,41 @@ func NewObservabilityMiddleware(
 		// แทน Context เดิม
 		c.SetUserContext(ctx)
 
+		// ----- Record Inflight -----
+		if !skip {
+			inflightCounter.Add(ctx, 1)
+		}
+
 		err := c.Next()
 
-		duration := time.Since(start).Seconds()
+		duration := time.Since(start).Milliseconds()
 		status := c.Response().StatusCode()
+
+		if !skip {
+			labels := []attribute.KeyValue{
+				attribute.String("method", method),
+				attribute.String("path", path),
+				attribute.Int("status", status),
+			}
+
+			requestCounter.Add(ctx, 1, metric.WithAttributes(labels...))
+			requestDuration.Record(ctx, float64(duration), metric.WithAttributes(labels...))
+			inflightCounter.Add(ctx, -1)
+
+			// Request Size (Header Content-Length)
+			if reqSize := c.Request().Header.ContentLength(); reqSize > 0 {
+				requestSize.Record(ctx, float64(reqSize), metric.WithAttributes(labels...))
+			}
+
+			// Response Size (Body Length)
+			if resSize := len(c.Response().Body()); resSize > 0 {
+				responseSize.Record(ctx, float64(resSize), metric.WithAttributes(labels...))
+			}
+
+			if status >= 400 {
+				errorCounter.Add(ctx, 1, metric.WithAttributes(labels...))
+			}
+		}
 
 		// log unhandle error
 		if err != nil {
@@ -89,7 +134,7 @@ func NewObservabilityMiddleware(
 		msg := fmt.Sprintf("%d - %s %s", status, method, path)
 		reqLogger.Info(msg,
 			zap.Int("status", status),
-			zap.Float64("duration_sec", duration),
+			zap.Int64("duration_ms", duration),
 		)
 
 		return err

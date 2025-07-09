@@ -3,6 +3,9 @@ package main
 import (
 	"context"
 	"os"
+	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/runtime"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -30,13 +33,19 @@ func main() {
 	}
 	defer otel.Shutdown(context.Background())
 
+	// เก็บ Process Metrics: สร้าง Runtime Instrument → ผูกกับ MeterProvider
+	runtime.Start(
+		runtime.WithMinimumReadMemStatsInterval(time.Second * 10),
+	)
+
 	// Init Fiber
 	app := fiber.New()
 
 	// Middlewares
 	app.Use(middleware.NewObservabilityMiddleware(
 		logger.Default(),
-		otel.TracerProvider.Tracer("demo-app"), // เพิ่มส่ง tracer
+		otel.TracerProvider.Tracer("demo-app"),
+		otel.MeterProvider.Meter("demo-app"), // เพิ่มส่ง meter
 	))
 	app.Use(cors.New())
 	app.Use(recover.New())

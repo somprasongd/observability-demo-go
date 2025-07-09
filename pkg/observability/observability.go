@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
@@ -15,6 +17,7 @@ import (
 
 type OTel struct {
 	TracerProvider *sdktrace.TracerProvider
+	MeterProvider  *sdkmetric.MeterProvider // เพิ่ม metric
 }
 
 func (c *OTel) Shutdown(ctx context.Context) {
@@ -23,6 +26,10 @@ func (c *OTel) Shutdown(ctx context.Context) {
 
 	if err := c.TracerProvider.Shutdown(ctx); err != nil {
 		log.Println("failed to shutdown tracer:", err)
+	}
+
+	if err := c.MeterProvider.Shutdown(ctx); err != nil { // เพิ่ม metric
+		log.Println("failed to shutdown meter:", err)
 	}
 }
 
@@ -52,7 +59,25 @@ func NewOTel(ctx context.Context, collectorAddr, serviceName string) (*OTel, err
 	)
 	otel.SetTracerProvider(tp)
 
+	// ----- Meter -----
+	metricExp, err := otlpmetricgrpc.New(ctx,
+		otlpmetricgrpc.WithEndpoint(collectorAddr),
+		otlpmetricgrpc.WithInsecure(),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	mp := sdkmetric.NewMeterProvider(
+		sdkmetric.WithReader(
+			sdkmetric.NewPeriodicReader(metricExp),
+		),
+		sdkmetric.WithResource(res),
+	)
+	otel.SetMeterProvider(mp)
+
 	return &OTel{
 		TracerProvider: tp,
+		MeterProvider:  mp,
 	}, nil
 }

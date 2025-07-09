@@ -11,6 +11,14 @@ exporters:
     endpoint: tempo:4317
     tls:
       insecure: true
+  # Expose Prometheus endpoint → Prometheus server จะ scrape ตรงนี้
+  prometheus:
+    endpoint: "0.0.0.0:9464"
+  # ดู stdout/stderr ของ Collector (log console) เพื่อ debug
+  debug:
+    # normal → ข้อมูลหลัก (resource, scope, metric name)
+    # detailed → ลึกสุด! เห็น datapoints ทุกรายการ
+    verbosity: detailed
 
 processors:
   batch:
@@ -21,3 +29,11 @@ service:
       receivers: [otlp]
       processors: [batch]
       exporters: [otlp/tempo]
+      # อย่าเปิดใน production → log วิ่งมหาศาล
+      # exporters: [otlp/tempo, debug]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheus]
+      # อย่าเปิดใน production → log วิ่งมหาศาล
+      # exporters: [prometheus, debug]
