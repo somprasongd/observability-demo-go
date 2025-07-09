@@ -21,8 +21,11 @@ services:
   loki:
     image: grafana/loki:latest
     container_name: loki
-    ports:
-      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki_data:/loki
+    # ports:
+    #   - "3100:3100" 
 
   promtail:
     image: grafana/promtail:latest
@@ -73,4 +76,5 @@ services:
       - tempo
 
 volumes:
+  loki_data:
   grafana-data:

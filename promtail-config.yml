@@ -31,6 +31,13 @@ scrape_configs:
       - docker: {}
       - json:
           expressions:
-            app_name: app_name
+            app_name:
+            level:
+            msg:
+            request_id:
+            trace_id:
       - labels:
-          app: app_name
+          app_name:
+          level:
+          request_id:
+          trace_id:
