@@ -11,6 +11,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -52,20 +53,6 @@ func NewObservabilityMiddleware(
 			}
 		}
 
-		var (
-			ctx     context.Context
-			span    trace.Span
-			traceID string
-		)
-
-		if skip {
-			ctx = c.Context()
-		} else {
-			ctx, span = tracer.Start(c.Context(), "HTTP "+c.Method()+" "+path)
-			defer span.End()
-			traceID = span.SpanContext().TraceID().String()
-		}
-
 		requestID := c.Get("X-Request-ID")
 		if requestID == "" {
 			requestID = uuid.New().String()
@@ -74,12 +61,31 @@ func NewObservabilityMiddleware(
 		// Bind Request ID ลง Response Header
 		c.Set("X-Request-ID", requestID)
 
+		var (
+			ctx     context.Context
+			span    trace.Span
+			traceID string
+			spanID  string
+		)
+
+		if skip {
+			ctx = c.Context()
+		} else {
+			ctx, span = tracer.Start(c.Context(), "HTTP "+c.Method()+" "+path,
+				trace.WithAttributes(attribute.String("http.request_id", requestID)),
+				trace.WithAttributes(attribute.String("http.request.method", method)),
+				trace.WithAttributes(attribute.String("url.path", path)),
+			)
+			defer span.End()
+			traceID = span.SpanContext().TraceID().String()
+			spanID = span.SpanContext().SpanID().String()
+		}
+
 		// สร้าง child logger
 		reqLogger := baseLogger.With(
-			zap.String("trace_id", traceID), // เพิ่ม trace_id เพื่อเชื่อมโยง log กับ trace
 			zap.String("request_id", requestID),
-			zap.String("method", method),
-			zap.String("path", path),
+			zap.String("http.request.method", method),
+			zap.String("url.path", path),
 		)
 
 		// สร้าง Context ใหม่ที่มี logger
@@ -99,9 +105,9 @@ func NewObservabilityMiddleware(
 
 		if !skip {
 			labels := []attribute.KeyValue{
-				attribute.String("method", method),
-				attribute.String("path", path),
-				attribute.Int("status", status),
+				attribute.String("http.request.method", method),
+				attribute.String("url.path", path),
+				attribute.Int("http.response.status_code", status),
 			}
 
 			requestCounter.Add(ctx, 1, metric.WithAttributes(labels...))
@@ -128,14 +134,28 @@ func NewObservabilityMiddleware(
 			reqLogger.Error("an error occurred",
 				zap.Any("error", err),
 				zap.ByteString("stack", debug.Stack()),
+				zap.String("trace_id", traceID), // เพิ่ม trace_id เพื่อเชื่อมโยง log กับ trace
+				zap.String("span_id", spanID),   // เพิ่ม span_id เพื่อเชื่อมโยง log กับ trace
 			)
 		}
 
 		msg := fmt.Sprintf("%d - %s %s", status, method, path)
 		reqLogger.Info(msg,
-			zap.Int("status", status),
+			zap.Int("http.response.status_code", status),
 			zap.Int64("duration_ms", duration),
+			zap.String("trace_id", traceID), // เพิ่ม trace_id เพื่อเชื่อมโยง log กับ trace
+			zap.String("span_id", spanID),   // เพิ่ม span_id เพื่อเชื่อมโยง log กับ trace
 		)
+
+		span.SetAttributes(
+			attribute.Int("http.response.status_code", status),
+		)
+
+		if status >= 400 {
+			span.SetStatus(codes.Error, "")
+		} else {
+			span.SetStatus(codes.Ok, "")
+		}
 
 		return err
 	}

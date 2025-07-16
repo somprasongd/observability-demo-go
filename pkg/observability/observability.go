@@ -2,7 +2,7 @@ package observability
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -20,17 +20,19 @@ type OTel struct {
 	MeterProvider  *sdkmetric.MeterProvider // เพิ่ม metric
 }
 
-func (c *OTel) Shutdown(ctx context.Context) {
+func (c *OTel) Shutdown(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	if err := c.TracerProvider.Shutdown(ctx); err != nil {
-		log.Println("failed to shutdown tracer:", err)
+		return fmt.Errorf("failed to shutdown tracer: %w", err)
 	}
 
 	if err := c.MeterProvider.Shutdown(ctx); err != nil { // เพิ่ม metric
-		log.Println("failed to shutdown meter:", err)
+		return fmt.Errorf("failed to shutdown meter: %w", err)
 	}
+
+	return nil
 }
 
 func NewOTel(ctx context.Context, collectorAddr, serviceName string) (*OTel, error) {

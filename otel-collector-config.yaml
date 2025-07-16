@@ -28,12 +28,12 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlp/tempo]
+      # exporters: [otlp/tempo]
       # อย่าเปิดใน production → log วิ่งมหาศาล
-      # exporters: [otlp/tempo, debug]
+      exporters: [otlp/tempo, debug]
     metrics:
       receivers: [otlp]
       processors: [batch]
-      exporters: [prometheus]
+      # exporters: [prometheus]
       # อย่าเปิดใน production → log วิ่งมหาศาล
-      # exporters: [prometheus, debug]
+      exporters: [prometheus, debug]
